@@ -57,7 +57,7 @@ class ETLWorker:
 
     @coroutine
     def load_movies_to_elasticsearch(self, client: Elasticsearch,
-                                     save_state_coro: Generator):# -> Generator[None, Any, None]:
+                                     save_state_coro: Generator):
         """Загружает фильмы в Elasticsearch и
         отправляет состояние сохранения."""
         while loader_args := (yield):
