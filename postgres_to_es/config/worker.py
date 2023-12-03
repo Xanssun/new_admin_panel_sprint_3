@@ -57,14 +57,12 @@ class ETLWorker:
 
     @coroutine
     def load_movies_to_elasticsearch(self, client: Elasticsearch,
-                                     save_state_coro: Generator):
+                                     save_state_coro: Generator):# -> Generator[None, Any, None]:
         """Загружает фильмы в Elasticsearch и
         отправляет состояние сохранения."""
         while loader_args := (yield):
-            movies, last_updated_at = loader_args
-            self.load_to_elasticsearch(client,
-                                       movies, last_updated_at,
-                                       save_state_coro)
+            movies = loader_args[0]
+            self.load_to_elasticsearch(client, movies, save_state_coro)
 
     @coroutine
     def save_state_coro(self, state: State):
@@ -75,9 +73,9 @@ class ETLWorker:
             if send_to_save:
                 self.log_and_save_state(state, last_updated_at_to_save)
 
-    def fetch_and_send_changes(self, last_updated_at, table, next_node):
+    def fetch_and_send_changes(self, last_updated_at: str, table: str, next_node: Generator) -> None:
         """Извлекает изменения из таблицы и отправляет их следующему узлу."""
-        logger.info("Извлечение изменений из таблицы %s", table)
+        logger.info("Extracting changes from a table %s", table)
         sql = f'''
         SELECT id, updated_at
         FROM content.{table}
@@ -89,14 +87,14 @@ class ETLWorker:
             while rows := cursor.fetchmany(NUMBER_OF_FETCHED):
                 next_node.send((table, rows))
 
-    def save_and_send_state(self, table, last_updated_at, save_state):
+    def save_and_send_state(self, table: str, last_updated_at: str, save_state: Generator) -> None:
         """Сохраняет состояние и отправляет его следующему узлу."""
         save_state.send((table, last_updated_at))
 
-    def enrich_changes(self, table, rows, last_updated_at,
-                       next_node, save_state):
+    def enrich_changes(self, table: str, rows: list, last_updated_at: str,
+                       next_node: Generator, save_state: Generator) -> None:
         """Обогащает изменения и отправляет их следующему узлу."""
-        logger.info("Обогащение изменений из таблицы %s", table)
+        logger.info("Enriching changes from the table %s", table)
         sql = f'''
         SELECT fw.id, fw.updated_at
         FROM content.film_work fw
@@ -111,9 +109,9 @@ class ETLWorker:
                 save_state.send((table, last_updated_at))
                 next_node.send((rows, last_updated_at))
 
-    def merge_changes(self, rows, last_updated_at, next_node):
+    def merge_changes(self, rows: list, last_updated_at: str, next_node: Generator) -> None:
         """Объединяет изменения и отправляет их следующему узлу."""
-        logger.info("Объединение изменений")
+        logger.info("Merging changes")
         sql_ = '''
         SELECT
             fw.id,
@@ -178,10 +176,10 @@ class ETLWorker:
             while rows := cursor.fetchmany(NUMBER_OF_FETCHED):
                 next_node.send((rows, last_updated_at))
 
-    def transform_and_send_movies(self, movie_dicts,
-                                  last_updated_at, next_node):
+    def transform_and_send_movies(self, movie_dicts: list,
+                                  last_updated_at: str, next_node: Generator) -> None:
         """Преобразует фильмы и отправляет их следующему узлу."""
-        logger.info("Преобразование фильмов из PostgreSQL")
+        logger.info("Converting movies from PostgreSQL")
         batch = []
         for movie_dict in movie_dicts:
             movie = MovieRow(**movie_dict)
@@ -189,11 +187,11 @@ class ETLWorker:
             batch.append(movie)
         next_node.send((batch, last_updated_at))
 
-    def load_to_elasticsearch(self, client, movies,
-                              last_updated_at, save_state_coro):
+    def load_to_elasticsearch(self, client: Elasticsearch, movies: list,
+                              save_state_coro: Generator) -> None:
         """Загружает фильмы в Elasticsearch и
         отправляет состояние сохранения."""
-        logger.info("Загрузка %d фильмов в ElasticSearch", len(movies))
+        logger.info("Uploading %d movies to ElasticSearch", len(movies))
         data = [{
             "_index": "movies",
             "_id": row.id,
@@ -213,8 +211,8 @@ class ETLWorker:
         _, errors = helpers.bulk(client, actions=data)
         save_state_coro.send(not errors)
 
-    def log_and_save_state(self, state, last_updated_at_to_save):
+    def log_and_save_state(self, state: Generator, last_updated_at_to_save: str) -> None:
         """Логирует и сохраняет состояние."""
-        logger.info("Последнее состояние: %s: %s",
+        logger.info("The last state: %s: %s",
                     STATE_KEY, state.get_state(STATE_KEY))
         state.set_state(f"{STATE_KEY}", last_updated_at_to_save)

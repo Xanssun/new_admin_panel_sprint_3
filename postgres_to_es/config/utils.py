@@ -20,11 +20,9 @@ def preprocess_rows(rows):
 
 def create_index_if_not_exists(client: Elasticsearch,
                                index_path: str, index_name: str):
-    if client.indices.exists(index="movies"):
-        pass
-    else:
+    if not client.indices.exists(index="movies"):
         with open(index_path, "r") as fp:
             client.indices.create(
                 index=index_name,
                 body=json.load(fp)
-            )
+            ) 

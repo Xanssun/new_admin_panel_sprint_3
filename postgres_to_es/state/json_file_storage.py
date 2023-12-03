@@ -1,5 +1,4 @@
 import json
-from typing import Any, Dict, Optional
 
 from .base_storage import BaseStorage
 
@@ -10,10 +9,10 @@ class JsonFileStorage(BaseStorage):
     Формат хранения: JSON
     """
 
-    def __init__(self, file_path: Optional[str] = "storage.json") -> None:
+    def __init__(self, file_path: str = "storage.json") -> None:
         self.file_path = file_path
 
-    def save_state(self, state: Dict[str, Any]) -> None:
+    def save_state(self, state: dict) -> None:
         """Сохранить состояние в хранилище."""
         try:
             prev_key, prev_val = self.retrieve_state().popitem()
@@ -25,7 +24,7 @@ class JsonFileStorage(BaseStorage):
                 with open(self.file_path, 'w') as f:
                     json.dump(state, f)
 
-    def retrieve_state(self) -> Dict[str, Any]:
+    def retrieve_state(self) -> dict:
         """Получить состояние из хранилища."""
         try:
             with open(self.file_path, 'r') as f:

@@ -30,7 +30,7 @@ def start_etl_process(etl_worker, producer, state):
     объединяя, преобразуя и загружая данные."""
     while True:
         for table in Tables:
-            logger.info('Начало процесса ETL для таблицы %s', table.value)
+            logger.info('Starting the ETL process for the table %s', table.value)
             producer.send((state.get_state(STATE_KEY)
                            or str(datetime.min), table.value))
 
@@ -39,21 +39,21 @@ def start_etl_process(etl_worker, producer, state):
 
 def main():
     """Основная функция, инициализирующая и запускающая ETL-процесс."""
-    logger.info("Инициализация состояния")
+    logger.info("Initializing the state")
     state = State(JsonFileStorage(STATE_PATH))
 
     sleep(10)
     es_client = Elasticsearch(ELASTIC_CLIENT['host'])
 
-    logger.info("Создание индекса ES, если его нет")
+    logger.info("Creating an ES index if there is none")
     create_index_if_not_exists(es_client,
                                index_path=INDEX_PATH,
                                index_name=INDEX_NAME)
 
-    logger.info("Подключение к PostgreSQL")
+    logger.info("Connecting to PostgreSQL")
     with pg_connector(PG_CONF) as conn:
         etl_worker = ETLWorker(conn)
-        logger.info("Инициализация")
+        logger.info("Initialization")
 
         state_saver_ = etl_worker.save_state_coro(state)
         loader_ = etl_worker.load_movies_to_elasticsearch(es_client,
